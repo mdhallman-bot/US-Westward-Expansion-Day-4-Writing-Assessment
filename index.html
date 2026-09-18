@@ -51,8 +51,11 @@
   .grow-box { background:#fff3e0; border-left: 4px solid #ef6c00; }
   .glow-box h4, .grow-box h4 { margin: 0 0 6px 0; font-size: 14px; }
   .counter { font-size: 13px; color:#555; }
+  .turnin-section { margin-top: 20px; padding: 14px 16px; border: 2px solid #2e7d32; border-radius: 6px; background:#f1f8f1; }
+  #pdfBtnMain { background:#2e7d32; color:#fff; font-size: 15px; padding: 10px 18px; border: none; border-radius: 6px; cursor:pointer; }
+  .turnin-section p { font-size: 13px; color: #444; margin-top: 8px; }
   .failsafe-section { margin-top: 260px; padding-top: 14px; border-top: 1px dashed #ccc; }
-  #pdfBtn { background:#ddd; color:#888; font-size: 12px; padding: 6px 10px; border: 1px solid #ccc; }
+  #pdfBtnFailsafe { background:#ddd; color:#888; font-size: 12px; padding: 6px 10px; border: 1px solid #ccc; cursor:pointer; }
   .failsafe-section p { font-size: 11px; color: #999; }
 </style>
 </head>
@@ -63,6 +66,11 @@
 <div class="standalone-note">
   This is a standalone, ~20-minute writing check — separate from the rest of today's lesson. Your response
   here is graded, not a practice run.
+  <ol style="margin:8px 0 0 20px;">
+    <li><strong>Submit for Review</strong> — get recommendations on revisions before you're graded.</li>
+    <li><strong>Submit for Evaluation</strong> — receive your grade.</li>
+    <li><strong>Save as PDF</strong> — turn in a copy to Google Classroom.</li>
+  </ol>
 </div>
 
 <div class="context-tip" style="border-left-color:#223; background:#e9edf3;">
@@ -175,16 +183,24 @@
 <div class="wc" id="progressText">0% complete</div>
 
 <div class="buttons">
-  <button id="reviewBtn" onclick="submitReview()" disabled>Submit for Review <span class="counter" id="reviewCounter">(0/2 used)</span></button>
-  <button id="evalBtn" onclick="submitEvaluation()" disabled>Submit for Evaluation</button>
+  <button id="reviewBtn" onclick="submitReview()" disabled>Step 1: Submit for Review <span class="counter" id="reviewCounter">(0/2 used)</span></button>
+  <button id="evalBtn" onclick="submitEvaluation()" disabled>Step 2: Submit for Evaluation</button>
 </div>
 
 <div id="reviewFeedback"></div>
 <div id="evalFeedback"></div>
 
+<div class="turnin-section">
+  <strong>Step 3: Save as PDF</strong>
+  <p>This creates a PDF of your response, including your completion percentage and grade — save it, then upload it to Google Classroom to turn it in.</p>
+  <button id="pdfBtnMain" onclick="saveToPDF()" disabled>Save as PDF to Turn In</button>
+  <p id="pdfMainNote" style="color:#a00;">Unlocks after you've completed Step 2: Submit for Evaluation.</p>
+</div>
+
 <div class="failsafe-section">
-  <p>Technical issues only — this does not submit your work or affect your grade. Use the buttons above.</p>
-  <button id="pdfBtn" onclick="saveToPDF()">Save backup PDF</button>
+  <p>Technical issues only — if something breaks and Step 3 above won't unlock, use this instead so your
+  work isn't lost. Save this and email or share it with Mr. Hallman directly for individual grading.</p>
+  <button id="pdfBtnFailsafe" onclick="saveToPDF()">Save backup PDF</button>
 </div>
 
 <script>
@@ -376,6 +392,9 @@ async function submitEvaluation() {
       ${glowGrowHtml}`;
     document.getElementById('evalFeedback').innerHTML = '';
     document.getElementById('evalFeedback').appendChild(box);
+
+    document.getElementById('pdfBtnMain').disabled = false;
+    document.getElementById('pdfMainNote').style.display = 'none';
 
     callBackend("save_state", { ...getResponsePayload(), evaluation: data }).catch(e => console.warn("save_state failed:", e));
   } catch (e) {

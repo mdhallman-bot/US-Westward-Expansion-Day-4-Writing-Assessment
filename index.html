@@ -122,9 +122,17 @@
   </div>
 </div>
 
+<div class="field-block" style="background:#eef1f5; padding:12px 14px; border-radius:6px;">
+  <label for="studentId">Student ID (e.g. AB12) — required to save and track your work</label>
+  <input type="text" id="studentId" style="font-size:15px; padding:6px; width:180px;" placeholder="AB12" oninput="checkIdEntered()">
+  <button id="loadBtn" onclick="loadPreviousWork()" style="margin-left:10px; background:#455a64; color:#fff; padding:6px 12px; border-radius:4px; border:none; cursor:pointer;">Load my previous work</button>
+  <div id="loadStatus" class="wc" style="margin-top:4px;"></div>
+</div>
+
 <div class="field-block">
   <label for="claim">Context + Claim</label>
-  <textarea id="claim" oninput="updateProgress()" placeholder="Start with 1-2 sentences of context (what was happening before this?), THEN state your claim: using economic treatment, legal status/rights, and safety, whose promise came closer to being kept?"></textarea>
+  <div class="wc" style="color:#a00;">Typing only — pasting into these boxes is disabled.</div>
+  <textarea id="claim" oninput="updateProgress()" onpaste="return blockPaste(event)" placeholder="Start with 1-2 sentences of context (what was happening before this?), THEN state your claim: using economic treatment, legal status/rights, and safety, whose promise came closer to being kept?"></textarea>
   <div class="wc" id="wc-claim">0 words</div>
   <div class="frames">
     <div>"Before ___ happened, ___ was already going on. Because of this, ___'s promise came closer to being kept than ___'s."</div>
@@ -134,7 +142,7 @@
 
 <div class="field-block">
   <label for="evidence">Evidence &amp; Reasoning</label>
-  <textarea id="evidence" oninput="updateProgress()" placeholder="Cite at least one source from EACH thread. Organize your evidence by the three lenses (economic treatment, legal status/rights, safety) and explain how it supports your claim."></textarea>
+  <textarea id="evidence" oninput="updateProgress()" onpaste="return blockPaste(event)" placeholder="Cite at least one source from EACH thread. Organize your evidence by the three lenses (economic treatment, legal status/rights, safety) and explain how it supports your claim."></textarea>
   <div class="wc" id="wc-evidence">0 words</div>
   <div class="frames">
     <div>"One piece of evidence is ___. This shows ___ because ___."</div>
@@ -144,7 +152,7 @@
 
 <div class="field-block">
   <label for="counter">Counter-Argument</label>
-  <textarea id="counter" oninput="updateProgress()" placeholder="State the strongest reasonable opposing claim, using evidence from the OTHER thread."></textarea>
+  <textarea id="counter" oninput="updateProgress()" onpaste="return blockPaste(event)" placeholder="State the strongest reasonable opposing claim, using evidence from the OTHER thread."></textarea>
   <div class="wc" id="wc-counter">0 words</div>
   <div class="frames">
     <div>"Someone might disagree and say ___ instead, because ___."</div>
@@ -154,7 +162,7 @@
 
 <div class="field-block">
   <label for="resolution">Resolution</label>
-  <textarea id="resolution" oninput="updateProgress()" placeholder="Defend your original claim against the counter-evidence, OR revise your claim to account for it."></textarea>
+  <textarea id="resolution" oninput="updateProgress()" onpaste="return blockPaste(event)" placeholder="Defend your original claim against the counter-evidence, OR revise your claim to account for it."></textarea>
   <div class="wc" id="wc-resolution">0 words</div>
   <div class="frames">
     <div>"Even considering this, my claim still holds because ___."</div>
@@ -167,7 +175,7 @@
 <div class="wc" id="progressText">0% complete</div>
 
 <div class="buttons">
-  <button id="reviewBtn" onclick="submitReview()">Submit for Review <span class="counter" id="reviewCounter">(0/2 used)</span></button>
+  <button id="reviewBtn" onclick="submitReview()" disabled>Submit for Review <span class="counter" id="reviewCounter">(0/2 used)</span></button>
   <button id="evalBtn" onclick="submitEvaluation()" disabled>Submit for Evaluation</button>
 </div>
 
@@ -189,6 +197,20 @@ let lastEvaluation = null;
 
 const GRADE_TABLE = {4: 100, 3: 89, 2: 76, 1: 62}; // midpoints of your 4→100 conversion scale
 
+function blockPaste(e) {
+  e.preventDefault();
+  return false;
+}
+
+function getStudentId() {
+  return document.getElementById('studentId').value.trim();
+}
+
+function checkIdEntered() {
+  const hasId = getStudentId().length > 0;
+  document.getElementById('reviewBtn').disabled = !hasId || reviewCount >= 2;
+}
+
 function wordCount(str) {
   return str.trim().split(/\s+/).filter(w => w.length > 0).length;
 }
@@ -209,11 +231,25 @@ function updateProgress() {
 
 function getResponsePayload() {
   return {
+    studentId: getStudentId(),
     claim: document.getElementById('claim').value,
     evidence: document.getElementById('evidence').value,
     counter: document.getElementById('counter').value,
     resolution: document.getElementById('resolution').value
   };
+}
+
+function showError(containerId, action, err) {
+  const box = document.createElement('div');
+  box.className = 'feedback-box';
+  box.style.borderColor = '#c62828';
+  box.innerHTML = `<strong style="color:#c62828;">Something went wrong contacting the server (${action}).</strong>
+    <p style="font-size:13px;">${err.message || err}</p>
+    <p style="font-size:12px; color:#666;">Check the Apps Script Executions log: zero entries means the request
+    never arrived (check deployment access / "Who has access" = Anyone); a logged error means the action code
+    itself needs debugging. Confirm synthesis_review / synthesis_evaluate are actually pasted into the live
+    Code.gs and redeployed.</p>`;
+  document.getElementById(containerId).prepend(box);
 }
 
 async function callBackend(action, payload) {
@@ -222,10 +258,21 @@ async function callBackend(action, payload) {
     method: "POST",
     body: JSON.stringify({ action, secret: SHARED_SECRET, dayId: "unit3_day4_synthesis_standalone", ...payload })
   });
-  return res.json();
+  let text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error("Server did not return valid JSON (got: " + text.slice(0, 150) + "...)");
+  }
 }
 
 function mockResponse(action, payload) {
+  if (action === "load_state") {
+    return Promise.resolve({ found: false }); // mock always starts fresh
+  }
+  if (action === "save_state") {
+    return Promise.resolve({ saved: true });
+  }
   if (action === "synthesis_review") {
     return Promise.resolve({
       questions: [
@@ -251,50 +298,90 @@ function mockResponse(action, payload) {
   }
 }
 
-async function submitReview() {
-  if (reviewCount >= 2) return;
-  reviewCount++;
-  document.getElementById('reviewCounter').innerText = `(${reviewCount}/2 used)`;
-  if (reviewCount >= 2) document.getElementById('reviewBtn').disabled = true;
-  document.getElementById('evalBtn').disabled = false;
+async function loadPreviousWork() {
+  const id = getStudentId();
+  if (!id) { document.getElementById('loadStatus').innerText = "Enter your Student ID first."; return; }
+  document.getElementById('loadStatus').innerText = "Loading...";
+  try {
+    const data = await callBackend("load_state", { studentId: id });
+    if (data && data.found) {
+      document.getElementById('claim').value = data.claim || "";
+      document.getElementById('evidence').value = data.evidence || "";
+      document.getElementById('counter').value = data.counter || "";
+      document.getElementById('resolution').value = data.resolution || "";
+      updateProgress();
+      document.getElementById('loadStatus').innerText = "Previous work loaded.";
+    } else {
+      document.getElementById('loadStatus').innerText = "No previous work found for this ID — starting fresh.";
+    }
+  } catch (e) {
+    document.getElementById('loadStatus').innerText = "Couldn't load previous work: " + e.message;
+  }
+}
 
-  const data = await callBackend("synthesis_review", getResponsePayload());
-  const box = document.createElement('div');
-  box.className = 'feedback-box';
-  box.innerHTML = `<strong>Review ${reviewCount}/2 — questions to consider (this is coaching, not a grade):</strong><ul>${
-    data.questions.map(q => `<li>${q}</li>`).join('')
-  }</ul>`;
-  document.getElementById('reviewFeedback').prepend(box);
+async function submitReview() {
+  const id = getStudentId();
+  if (!id) { alert("Enter your Student ID before submitting."); return; }
+  if (reviewCount >= 2) return;
+
+  try {
+    const data = await callBackend("synthesis_review", getResponsePayload());
+    reviewCount++;
+    document.getElementById('reviewCounter').innerText = `(${reviewCount}/2 used)`;
+    if (reviewCount >= 2) document.getElementById('reviewBtn').disabled = true;
+    document.getElementById('evalBtn').disabled = false;
+
+    const box = document.createElement('div');
+    box.className = 'feedback-box';
+    box.innerHTML = `<strong>Review ${reviewCount}/2 — questions to consider (this is coaching, not a grade):</strong><ul>${
+      data.questions.map(q => `<li>${q}</li>`).join('')
+    }</ul>`;
+    document.getElementById('reviewFeedback').prepend(box);
+
+    callBackend("save_state", getResponsePayload()).catch(e => console.warn("save_state failed:", e));
+  } catch (e) {
+    showError('reviewFeedback', 'Submit for Review', e); // attempt NOT counted against the cap on failure
+  }
 }
 
 async function submitEvaluation() {
+  const id = getStudentId();
+  if (!id) { alert("Enter your Student ID before submitting."); return; }
   document.getElementById('evalBtn').disabled = true;
-  const data = await callBackend("synthesis_evaluate", getResponsePayload());
-  lastEvaluation = data;
 
-  const rows = data.criteria.map(c => `
-    <div class="rubric-row">
-      <span>${c.name}</span>
-      <span><span class="score-pill s${c.score}">${c.score}/4</span></span>
-    </div>
-    <div style="font-size:13px;color:#444;margin:2px 0 8px 0;">${c.feedback}</div>
-  `).join('');
+  try {
+    const data = await callBackend("synthesis_evaluate", getResponsePayload());
+    lastEvaluation = data;
 
-  const gradeValue = GRADE_TABLE[data.overallLevel] || "—";
+    const rows = data.criteria.map(c => `
+      <div class="rubric-row">
+        <span>${c.name}</span>
+        <span><span class="score-pill s${c.score}">${c.score}/4</span></span>
+      </div>
+      <div style="font-size:13px;color:#444;margin:2px 0 8px 0;">${c.feedback}</div>
+    `).join('');
 
-  const glowGrowHtml = `
-    <div class="glow-grow">
-      <div class="glow-box"><h4>✨ Glows</h4><ul>${(data.glows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
-      <div class="grow-box"><h4>🌱 Grows</h4><ul>${(data.grows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
-    </div>`;
+    const gradeValue = GRADE_TABLE[data.overallLevel] || "—";
 
-  const box = document.createElement('div');
-  box.className = 'feedback-box';
-  box.innerHTML = `<strong>Evaluation — Grading Per Category</strong>${rows}
-    <div class="grade-banner">Grade: ${gradeValue}/100</div>
-    ${glowGrowHtml}`;
-  document.getElementById('evalFeedback').innerHTML = '';
-  document.getElementById('evalFeedback').appendChild(box);
+    const glowGrowHtml = `
+      <div class="glow-grow">
+        <div class="glow-box"><h4>✨ Glows</h4><ul>${(data.glows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
+        <div class="grow-box"><h4>🌱 Grows</h4><ul>${(data.grows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
+      </div>`;
+
+    const box = document.createElement('div');
+    box.className = 'feedback-box';
+    box.innerHTML = `<strong>Evaluation — Grading Per Category</strong>${rows}
+      <div class="grade-banner">Grade: ${gradeValue}/100</div>
+      ${glowGrowHtml}`;
+    document.getElementById('evalFeedback').innerHTML = '';
+    document.getElementById('evalFeedback').appendChild(box);
+
+    callBackend("save_state", { ...getResponsePayload(), evaluation: data }).catch(e => console.warn("save_state failed:", e));
+  } catch (e) {
+    document.getElementById('evalBtn').disabled = false; // let them retry on failure
+    showError('evalFeedback', 'Submit for Evaluation', e);
+  }
 }
 
 function saveToPDF() {

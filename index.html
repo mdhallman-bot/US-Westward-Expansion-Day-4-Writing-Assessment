@@ -1,314 +1,125 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Synthesis Writing Check: Whose Promise Was Kept?</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<style>
-  body { font-family: Georgia, serif; max-width: 900px; margin: 0 auto; padding: 24px; color: #1a1a1a; background:#faf7f2; }
-  h1 { font-size: 26px; border-bottom: 3px solid #223; padding-bottom: 6px; }
-  h2 { font-size: 19px; margin-top: 28px; color: #223; }
-  .standalone-note { background:#fff3cd; border-left: 5px solid #b8860b; padding: 10px 14px; font-size: 14px; margin-bottom: 18px; }
-  .instructions { background: #eef1f5; border-left: 5px solid #223; padding: 14px 18px; margin-bottom: 20px; }
-  .instructions ul { margin: 6px 0 0 18px; padding: 0; }
-  .instructions li { margin-bottom: 6px; }
-  .note { font-style: italic; color: #444; margin-top: 8px; }
-  .context-tip { background: #fdeee0; border-left: 5px solid #c0621f; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
-  .rubric-help { cursor: help; text-decoration: underline dotted; position: relative; font-weight: bold; }
-  .rubric-help:hover::after {
-    content: attr(data-example); position: absolute; left: 0; top: 120%; background: #2c2c2c; color: #fff;
-    padding: 10px 12px; border-radius: 6px; font-size: 13px; width: 340px; z-index: 20; font-family: Arial, sans-serif;
-    font-weight: normal; font-style: normal; line-height: 1.4;
-  }
-  .vocab-group { margin-top: 10px; }
-  .vocab-group h4 { margin: 6px 0 2px 0; font-size: 14px; }
-  .vocab-list span.term { text-decoration: underline dotted; cursor: help; position: relative; font-weight: 600; }
-  .vocab-list span.term:hover::after {
-    content: attr(data-def); position: absolute; left: 0; top: 120%; background: #223; color: #fff;
-    padding: 8px 10px; border-radius: 6px; font-size: 13px; width: 260px; z-index: 10; font-family: Arial, sans-serif; font-weight: normal;
-  }
-  .field-block { margin-bottom: 16px; }
-  label { display:block; font-weight: bold; margin-bottom: 4px; }
-  textarea { width: 100%; min-height: 90px; font-family: Georgia, serif; font-size: 15px; padding: 8px; box-sizing: border-box; border: 1px solid #999; border-radius: 4px; }
-  .wc { font-size: 12px; color: #666; }
-  .progress-wrap { background:#ddd; border-radius: 6px; height: 18px; overflow:hidden; margin: 10px 0 4px; }
-  .progress-bar { background:#2e7d32; height:100%; width:0%; transition: width .3s; }
-  .buttons { display:flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
-  button { padding: 10px 18px; font-size: 15px; border-radius: 6px; border: none; cursor: pointer; }
-  #reviewBtn { background:#1565c0; color:#fff; }
-  #evalBtn { background:#6a1b9a; color:#fff; }
-  button:disabled { background:#aaa; cursor: not-allowed; }
-  .feedback-box { border: 1px solid #ccc; border-radius: 6px; padding: 14px; margin-top: 14px; background:#fff; }
-  .rubric-row { display:flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 6px 0; }
-  .score-pill { display:inline-block; padding: 2px 10px; border-radius: 12px; font-weight:bold; color:#fff; }
-  .s4{background:#2e7d32;} .s3{background:#558b2f;} .s2{background:#f9a825;} .s1{background:#c62828;}
-  .grade-banner { font-size: 22px; font-weight: bold; text-align:center; padding: 10px; margin-top:10px; border-radius: 6px; background:#f3e5f5; }
-  .glow-grow { display:flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
-  .glow-box, .grow-box { flex: 1; min-width: 240px; border-radius: 6px; padding: 10px 12px; }
-  .glow-box { background:#e8f5e9; border-left: 4px solid #2e7d32; }
-  .grow-box { background:#fff3e0; border-left: 4px solid #ef6c00; }
-  .glow-box h4, .grow-box h4 { margin: 0 0 6px 0; font-size: 14px; }
-  .counter { font-size: 13px; color:#555; }
-  .failsafe-section { margin-top: 260px; padding-top: 14px; border-top: 1px dashed #ccc; }
-  #pdfBtn { background:#ddd; color:#888; font-size: 12px; padding: 6px 10px; border: 1px solid #ccc; }
-  .failsafe-section p { font-size: 11px; color: #999; }
-</style>
-</head>
-<body>
+/*
+ * Backend for the STANDALONE synthesis writing check (separate from the rest of Day 4).
+ * ADD THESE TWO CASES to the existing action switch in Code.gs
+ * (alongside decode_help, guided_check, calc_check, reflect_check, save_state/load_state).
+ *
+ * Assumes existing helper functions already in Code.gs:
+ *   - callClaude(model, systemPrompt, userMessage)
+ *   - logToSheet(dayId, studentId, action, payload)
+ * Confirm those exact helper names/signatures against your current Code.gs before pasting this in.
+ *
+ * CONFIRM before deploying:
+ *   - Exact pinned Sonnet model string used elsewhere in your Code.gs (MODEL_SONNET below is a placeholder)
+ *   - Script Properties still match: all-caps, underscores, no spaces
+ *   - "Who has access" is still "Anyone"
+ *
+ * NOTE: This grade is REAL, not a practice/formative score — the frontend labels it "Grade," not
+ * "Practice Grade." Make sure logToSheet records it wherever your gradebook pulls from.
+ */
 
-<h1>Synthesis Writing Check: Whose Promise Was Kept?</h1>
+const MODEL_HAIKU = "claude-haiku-4-5-20251001";
+const MODEL_SONNET = "claude-sonnet-4-5"; // PLACEHOLDER — confirm against your other Code.gs files
 
-<div class="standalone-note">
-  This is a standalone, ~20-minute writing check — separate from the rest of today's lesson. Your response
-  here is graded, not a practice run.
-</div>
+const RUBRIC = [
+  { name: "Thesis/Claim", levels: {
+      4: "Specific, analytical claim reflecting deep understanding.",
+      3: "Clear, arguable claim that addresses the prompt.",
+      2: "Present but lacks specificity or arguability.",
+      1: "Missing, unclear, or doesn't address the prompt." }},
+  { name: "Contextualization", levels: {
+      4: "Rich, relevant historical context, placed BEFORE the claim.",
+      3: "Places the claim in relevant historical context (push/pull factors, CPRR labor shortage, etc.) before stating it.",
+      2: "Limited or loosely connected context, or context is missing/skipped entirely before the claim.",
+      1: "Little to no historical context." }},
+  { name: "Use of Evidence", levels: {
+      4: "3+ specific, well-integrated pieces of evidence.",
+      3: "Specific, relevant evidence from BOTH threads (Exoduster and Chinese laborer).",
+      2: "Evidence present but vague, one-sided, or poorly integrated.",
+      1: "Little to no evidence, or evidence is irrelevant." }},
+  { name: "Analysis and Reasoning", levels: {
+      4: "Insightful analysis connecting evidence to thesis; strong counter-argument handling.",
+      3: "Clearly explains HOW evidence supports the claim; counter-argument is addressed, not ignored.",
+      2: "Weak connection between evidence and claim; mostly summarizes rather than explains.",
+      1: "Little to no analysis; restates evidence without explanation." }},
+  { name: "Vocabulary Use", levels: {
+      4: "6+ Tier 2/3 terms combined, exceeding both minimums, with at least one inline definition used naturally.",
+      3: "2+ Tier 2 AND 4+ Tier 3 terms used correctly in context, or properly defined inline.",
+      2: "Some vocabulary present, but under the required counts, vague, or forced.",
+      1: "Little to no accurate use of the day's vocabulary." }}
+];
 
-<div class="context-tip" style="border-left-color:#223; background:#e9edf3;">
-  <strong>The Question:</strong> Compare the Exodusters and the Chinese railroad workers using these three lenses:
-  <ol style="margin:6px 0 6px 20px;">
-    <li><strong>Economic treatment / pay</strong></li>
-    <li><strong>Legal status and rights</strong></li>
-    <li><strong>Safety and violence</strong></li>
-  </ol>
-  Based on these three, whose promise came closer to being kept?
-</div>
+const TIER2_WORDS = ["push factor","pull factor","perspective","corroborate","evidence","reasoning","contrast","discrimination","counter-argument"]; // need 2+
+const TIER3_WORDS = ["exoduster","nativism","sojourner","naturalization","chinese exclusion act","labor recruitment"]; // need 4+
 
-<div class="instructions">
-  <p><strong>What you need to write for</strong> (hover the <span class="rubric-help" data-example="Although the 13th, 14th, and 15th Amendments legally ended slavery and promised equal citizenship, Black Codes and voter suppression laws show that Southern states worked to deny African Americans real freedom in practice.">🔎 criterion name</span> to see what a strong (4-level) response looked like when we studied Reconstruction — this is meant to show you the SHAPE of strong writing you've already seen, not something to copy):</p>
-  <ul>
-    <li><span class="rubric-help" data-example="Although the 13th, 14th, and 15th Amendments legally ended slavery and promised equal citizenship, Black Codes and voter suppression laws show that Southern states worked to deny African Americans real freedom in practice.">Thesis/Claim</span> — a clear, arguable answer to the question, not just a restatement of it.</li>
-    <li><span class="rubric-help" data-example="After the Civil War ended in 1865, the South's economy and social structure had collapsed, and white Southern leaders were searching for new ways to control Black labor now that slavery had been abolished by law.">Contextualization</span> — set up the historical situation BEFORE your claim.</li>
-    <li><span class="rubric-help" data-example="The Freedmen's Bureau built thousands of schools for formerly enslaved people, but many Black families still ended up trapped in sharecropping contracts that kept them in constant debt to white landowners.">Use of Evidence</span> — cite at least one specific source from EACH thread (Exodusters and Chinese railroad workers).</li>
-    <li><span class="rubric-help" data-example="This shows that legal freedom and lived freedom were not the same thing: a law could grant a right on paper while economic systems like sharecropping made it nearly impossible to actually use that right.">Analysis and Reasoning</span> — explain HOW your evidence supports your claim, not just that it exists.</li>
-    <li><span class="rubric-help" data-example="Even after the 15th Amendment technically guaranteed Black men the right to vote, many faced disenfranchisement — being denied that right in practice — through poll taxes and literacy tests.">Vocabulary Use</span> — use at least <strong>2 Tier 2</strong> and <strong>4 Tier 3</strong> words correctly.</li>
-  </ul>
+function handleSynthesisReview(payload) {
+  const systemPrompt = `You are a Socratic writing coach for a 10th-grade U.S. History class.
+The prompt asks students to compare Exodusters and Chinese railroad workers using three specific lenses:
+(1) economic treatment/pay, (2) legal status and rights, (3) safety and violence, then argue whose promise
+came closer to being kept.
+STRICT RULE: You must NEVER supply content, analysis, phrasing, or language the student could insert
+directly into their response. Ask guiding questions ONLY. Do not rewrite sentences, do not give example
+phrasing, do not state historical facts they haven't already used.
+Pay special attention to whether the student included historical CONTEXT before their claim — many
+students skip this entirely and jump straight to the claim. If context is missing, one of your three
+questions should point at that gap without stating what the context should be. Also check whether the
+student actually used evidence tied to all three lenses, or just one or two.
+Also check vocabulary: Tier 2 (need 2+): ${TIER2_WORDS.join(", ")}. Tier 3 (need 4+): ${TIER3_WORDS.join(", ")}.
+Return exactly 3 questions as a JSON array under the key "questions". No preamble, no other text.`;
 
-  <div class="context-tip">
-    <strong>A common problem:</strong> most students can write a claim, but skip context entirely and jump straight into it.
-    Before you write your claim, spend 1–2 sentences answering: <em>what was already happening before this decision that
-    makes it make sense?</em> (Example: Reconstruction's collapse and the rise of debt-based sharecropping; or the CPRR's
-    labor shortage.) This goes at the START of your Claim box, not somewhere else.
-  </div>
+  const userMessage = `Context+Claim: ${payload.claim}\nEvidence & Reasoning: ${payload.evidence}\nCounter-Argument: ${payload.counter}\nResolution: ${payload.resolution}`;
 
-  <p class="note">Defining a term as part of your sentence counts as using it correctly — for example: "Singleton was recruiting through <em>labor recruitment</em>, the practice of actively persuading people to relocate for work." That's a valid use of the term, not a weaker one.</p>
-
-  <div class="vocab-group">
-    <h4>Tier 2 words — use at least 2 (hover for definitions):</h4>
-    <p class="vocab-list">
-      <span class="term" data-def="A hardship that drives people away from a place.">push factor</span>,
-      <span class="term" data-def="Something that draws people toward a new place.">pull factor</span>,
-      <span class="term" data-def="The vantage point or position that shapes how someone experiences and tells a story.">perspective</span>,
-      <span class="term" data-def="Checking two sources against each other to see where they agree or diverge.">corroborate</span>,
-      <span class="term" data-def="Specific proof from a source used to support a claim.">evidence</span>,
-      <span class="term" data-def="Explaining how evidence connects to and supports a claim.">reasoning</span>,
-      <span class="term" data-def="Explaining a meaningful difference between two things.">contrast</span>,
-      <span class="term" data-def="Unequal treatment based on group membership.">discrimination</span>,
-      <span class="term" data-def="The strongest reasonable version of the opposing position.">counter-argument</span>.
-    </p>
-  </div>
-
-  <div class="vocab-group">
-    <h4>Tier 3 words — use at least 4 (hover for definitions):</h4>
-    <p class="vocab-list">
-      <span class="term" data-def="A Black Southerner who migrated to Kansas in 1879-80, framing the move as an escape from oppression.">Exoduster</span>,
-      <span class="term" data-def="The belief that immigrants threaten an established population.">nativism</span>,
-      <span class="term" data-def="Someone living somewhere temporarily, intending to return home.">sojourner</span>,
-      <span class="term" data-def="The legal process of becoming a citizen.">naturalization</span>,
-      <span class="term" data-def="The 1882 law banning nearly all Chinese immigration and barring naturalization for those already here.">Chinese Exclusion Act</span>,
-      <span class="term" data-def="Actively seeking out and persuading people to relocate for work or land.">labor recruitment</span>.
-    </p>
-  </div>
-</div>
-
-<div class="field-block">
-  <label for="claim">Context + Claim</label>
-  <textarea id="claim" oninput="updateProgress()" placeholder="Start with 1-2 sentences of context (what was happening before this?), THEN state your claim: using economic treatment, legal status/rights, and safety, whose promise came closer to being kept?"></textarea>
-  <div class="wc" id="wc-claim">0 words</div>
-</div>
-
-<div class="field-block">
-  <label for="evidence">Evidence &amp; Reasoning</label>
-  <textarea id="evidence" oninput="updateProgress()" placeholder="Cite at least one source from EACH thread. Organize your evidence by the three lenses (economic treatment, legal status/rights, safety) and explain how it supports your claim."></textarea>
-  <div class="wc" id="wc-evidence">0 words</div>
-</div>
-
-<div class="field-block">
-  <label for="counter">Counter-Argument</label>
-  <textarea id="counter" oninput="updateProgress()" placeholder="State the strongest reasonable opposing claim, using evidence from the OTHER thread."></textarea>
-  <div class="wc" id="wc-counter">0 words</div>
-</div>
-
-<div class="field-block">
-  <label for="resolution">Resolution</label>
-  <textarea id="resolution" oninput="updateProgress()" placeholder="Defend your original claim against the counter-evidence, OR revise your claim to account for it."></textarea>
-  <div class="wc" id="wc-resolution">0 words</div>
-</div>
-
-<label>Completion</label>
-<div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
-<div class="wc" id="progressText">0% complete</div>
-
-<div class="buttons">
-  <button id="reviewBtn" onclick="submitReview()">Submit for Review <span class="counter" id="reviewCounter">(0/2 used)</span></button>
-  <button id="evalBtn" onclick="submitEvaluation()" disabled>Submit for Evaluation</button>
-</div>
-
-<div id="reviewFeedback"></div>
-<div id="evalFeedback"></div>
-
-<div class="failsafe-section">
-  <p>Technical issues only — this does not submit your work or affect your grade. Use the buttons above.</p>
-  <button id="pdfBtn" onclick="saveToPDF()">Save backup PDF</button>
-</div>
-
-<script>
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8DQfJBgmLqOfG4fPSiT8rPt1aeutfeLyDFClx6F5Wvc8S6Alscaq9xtWQf95cB1c/exec";
-const SHARED_SECRET = "vpp-us-26-27"; // confirm this is still current
-const MOCK_MODE = false; // live — calls the real Apps Script endpoint now
-
-let reviewCount = 0;
-let lastEvaluation = null;
-
-const GRADE_TABLE = {4: 100, 3: 89, 2: 76, 1: 62}; // midpoints of your 4→100 conversion scale
-
-function wordCount(str) {
-  return str.trim().split(/\s+/).filter(w => w.length > 0).length;
+  const result = callClaude(MODEL_HAIKU, systemPrompt, userMessage);
+  logToSheet(payload.dayId, payload.studentId, "synthesis_review", payload);
+  return result;
 }
 
-function updateProgress() {
-  const fields = ['claim','evidence','counter','resolution'];
-  let total = 0;
-  fields.forEach(f => {
-    const wc = wordCount(document.getElementById(f).value);
-    document.getElementById('wc-' + f).innerText = wc + " words";
-    total += Math.min(25, (wc / 15) * 25);
-  });
-  const pct = Math.round(total);
-  document.getElementById('progressBar').style.width = pct + "%";
-  document.getElementById('progressText').innerText = pct + "% complete";
-  return pct;
+function handleSynthesisEvaluate(payload) {
+  const rubricText = RUBRIC.map(r =>
+    `${r.name}:\n  4=${r.levels[4]}\n  3=${r.levels[3]}\n  2=${r.levels[2]}\n  1=${r.levels[1]}`
+  ).join("\n\n");
+
+  const systemPrompt = `You are grading a 10th-grade U.S. History synthesis response against this rubric.
+The prompt asks students to compare Exodusters and Chinese railroad workers using three specific lenses:
+(1) economic treatment/pay, (2) legal status and rights, (3) safety and violence, then argue whose promise
+came closer to being kept. For Use of Evidence and Analysis and Reasoning, check whether the student's
+evidence actually addresses these three lenses (or at least more than one), not just a single vague
+comparison of "opportunity."
+This IS the recorded grade, not a practice score — be honest and specific, not artificially generous.
+Score each of the 5 criteria 1-4 using the rubric below. For Vocabulary Use, count Tier 2 words
+(${TIER2_WORDS.join(", ")}) and Tier 3 words (${TIER3_WORDS.join(", ")}) used correctly IN CONTEXT —
+note that a student defining a term inline (e.g. "using labor recruitment, the practice of...") counts
+as correct use. For Contextualization, specifically check whether context appears BEFORE the claim, not
+after or missing — this is a known common gap for this class.
+
+RUBRIC:
+${rubricText}
+
+Also produce 2 "glows" (specific strengths) and 2 "grows" (specific, actionable improvements) that
+synthesize across all 5 categories — not a repeat of the per-category feedback, but the two biggest
+takeaways in each direction.
+
+Return JSON only, in this exact shape, no other text:
+{
+  "criteria": [
+    {"name": "Thesis/Claim", "score": <1-4>, "feedback": "<one sentence, specific to this response>"},
+    {"name": "Contextualization", "score": <1-4>, "feedback": "..."},
+    {"name": "Use of Evidence", "score": <1-4>, "feedback": "..."},
+    {"name": "Analysis and Reasoning", "score": <1-4>, "feedback": "..."},
+    {"name": "Vocabulary Use", "score": <1-4>, "feedback": "..."}
+  ],
+  "overallLevel": <1-4, rounded average of the five scores>,
+  "glows": ["...", "..."],
+  "grows": ["...", "..."]
+}`;
+
+  const userMessage = `Context+Claim: ${payload.claim}\nEvidence & Reasoning: ${payload.evidence}\nCounter-Argument: ${payload.counter}\nResolution: ${payload.resolution}`;
+
+  const result = callClaude(MODEL_SONNET, systemPrompt, userMessage);
+  logToSheet(payload.dayId, payload.studentId, "synthesis_evaluate", payload);
+  return result;
 }
 
-function getResponsePayload() {
-  return {
-    claim: document.getElementById('claim').value,
-    evidence: document.getElementById('evidence').value,
-    counter: document.getElementById('counter').value,
-    resolution: document.getElementById('resolution').value
-  };
-}
-
-async function callBackend(action, payload) {
-  if (MOCK_MODE) return mockResponse(action, payload);
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    body: JSON.stringify({ action, secret: SHARED_SECRET, dayId: "unit3_day4_synthesis_standalone", ...payload })
-  });
-  return res.json();
-}
-
-function mockResponse(action, payload) {
-  if (action === "synthesis_review") {
-    return Promise.resolve({
-      questions: [
-        "You cite Lewis's account — does your writing explain WHY it supports your claim, or just that it exists?",
-        "Is your counter-argument the STRONGEST version of that opposing view, or an easy one to dismiss?",
-        "Scan your response: how many Tier 3 words do you see — you need 4. Could any be strengthened with an inline definition?"
-      ]
-    });
-  }
-  if (action === "synthesis_evaluate") {
-    return Promise.resolve({
-      criteria: [
-        { name: "Thesis/Claim", score: 3, feedback: "Clear and arguable, addresses the prompt directly." },
-        { name: "Contextualization", score: 2, feedback: "Claim is present but the response jumps to it without setting up what was happening beforehand." },
-        { name: "Use of Evidence", score: 3, feedback: "One source per thread, both specific." },
-        { name: "Analysis and Reasoning", score: 2, feedback: "Mostly explains WHAT the evidence shows; push further into WHY it supports the claim." },
-        { name: "Vocabulary Use", score: 2, feedback: "Only 2 Tier 3 words used; 4 are required." }
-      ],
-      overallLevel: 2,
-      glows: ["Strong, specific evidence chosen from both threads.", "Counter-argument engages with a real opposing view, not a weak one."],
-      grows: ["Add 1-2 sentences of context BEFORE the claim, not after.", "Use 2 more Tier 3 words to hit the required count."]
-    });
-  }
-}
-
-async function submitReview() {
-  if (reviewCount >= 2) return;
-  reviewCount++;
-  document.getElementById('reviewCounter').innerText = `(${reviewCount}/2 used)`;
-  if (reviewCount >= 2) document.getElementById('reviewBtn').disabled = true;
-  document.getElementById('evalBtn').disabled = false;
-
-  const data = await callBackend("synthesis_review", getResponsePayload());
-  const box = document.createElement('div');
-  box.className = 'feedback-box';
-  box.innerHTML = `<strong>Review ${reviewCount}/2 — questions to consider (this is coaching, not a grade):</strong><ul>${
-    data.questions.map(q => `<li>${q}</li>`).join('')
-  }</ul>`;
-  document.getElementById('reviewFeedback').prepend(box);
-}
-
-async function submitEvaluation() {
-  document.getElementById('evalBtn').disabled = true;
-  const data = await callBackend("synthesis_evaluate", getResponsePayload());
-  lastEvaluation = data;
-
-  const rows = data.criteria.map(c => `
-    <div class="rubric-row">
-      <span>${c.name}</span>
-      <span><span class="score-pill s${c.score}">${c.score}/4</span></span>
-    </div>
-    <div style="font-size:13px;color:#444;margin:2px 0 8px 0;">${c.feedback}</div>
-  `).join('');
-
-  const gradeValue = GRADE_TABLE[data.overallLevel] || "—";
-
-  const glowGrowHtml = `
-    <div class="glow-grow">
-      <div class="glow-box"><h4>✨ Glows</h4><ul>${(data.glows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
-      <div class="grow-box"><h4>🌱 Grows</h4><ul>${(data.grows||[]).map(g=>`<li>${g}</li>`).join('')}</ul></div>
-    </div>`;
-
-  const box = document.createElement('div');
-  box.className = 'feedback-box';
-  box.innerHTML = `<strong>Evaluation — Grading Per Category</strong>${rows}
-    <div class="grade-banner">Grade: ${gradeValue}/100</div>
-    ${glowGrowHtml}`;
-  document.getElementById('evalFeedback').innerHTML = '';
-  document.getElementById('evalFeedback').appendChild(box);
-}
-
-function saveToPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const pct = updateProgress();
-  let y = 15;
-  doc.setFontSize(14);
-  doc.text("Synthesis Writing Check — Saved Response", 15, y); y += 10;
-  doc.setFontSize(10);
-  doc.text(`Completion: ${pct}%`, 15, y); y += 6;
-  const gradeText = lastEvaluation ? `Grade: ${GRADE_TABLE[lastEvaluation.overallLevel]}/100` : "Grade: not yet evaluated";
-  doc.text(gradeText, 15, y); y += 10;
-
-  const sections = [
-    ["Context + Claim", document.getElementById('claim').value],
-    ["Evidence & Reasoning", document.getElementById('evidence').value],
-    ["Counter-Argument", document.getElementById('counter').value],
-    ["Resolution", document.getElementById('resolution').value]
-  ];
-  sections.forEach(([label, text]) => {
-    doc.setFont(undefined, 'bold');
-    doc.text(label, 15, y); y += 6;
-    doc.setFont(undefined, 'normal');
-    const lines = doc.splitTextToSize(text || "(blank)", 180);
-    doc.text(lines, 15, y); y += lines.length * 6 + 6;
-    if (y > 270) { doc.addPage(); y = 15; }
-  });
-
-  doc.save("synthesis_writing_check.pdf");
-}
-</script>
-
-</body>
-</html>
+/* In your main doPost/action-router function, add:
+   if (action === "synthesis_review")   return respond(handleSynthesisReview(payload));
+   if (action === "synthesis_evaluate") return respond(handleSynthesisEvaluate(payload));
+*/
